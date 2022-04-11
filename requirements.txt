@@ -1,0 +1,14 @@
+# make sure there were installed by the base
+numpy
+tensorflow-gpu
+tensorflow-probability~=0.15.0
+
+sklearn
+pandas
+matplotlib
+h5py
+Pillow
+h5py
+pydot
+opencv-python
+tqdm
