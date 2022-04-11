@@ -5,48 +5,44 @@ import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras.backend as K
-from tensorflow.keras.applications.vgg16 import VGG16
-from tensorflow.keras.applications.vgg16 import preprocess_input, decode_predictions
-from tensorflow.keras.preprocessing import image
 from tensorflow.keras.models import load_model
 
 tf.compat.v1.disable_eager_execution()
-# I usually do not like referencing files relative to the running script but this is for just two images
-_FILE_PATH = Path(__file__).parent.absolute()
 
+FILE_PATH = Path(__file__).parent.absolute()
 
-# this is from Chollet Jupyter Notebooks Section 5.4
-# https://github.com/fchollet/deep-learning-with-python-notebooks/blob/660498db01c0ad1368b9570568d5df473b9dc8dd/first_edition/5.4-visualizing-what-convnets-learn.ipynb
 def main():
     # Heat map of class activation
     # The local path to our target image
     # This is similar to the example in Section 5.4 from the Chollet book
-    img_names = ['artemis.jpg', 'freya.jpg']
-    model = load_model('./archive/model_cnn.h5')
+    data_names = ['one', 'two']
+    model = load_model('./archive/model_crnn.h5')
 
-    for img_name in img_names:
-        img_path = str(_FILE_PATH / img_name)
+    crnn_heatmap(data_names, model)
 
-        # `img` is a PIL image of size 224x224
-        img = image.load_img(img_path, target_size=(224, 224))
+
+def cnn_heatmap(data_names, model):
+    for data_name in data_names:
+        data_path = str(FILE_PATH / './data/' / f'{data_name}.npy')
+
+        # import data and scale
+        data = (np.squeeze(np.load(data_path)) / 128.) - 1
 
         # `x` is a float32 Numpy array of shape (224, 224, 3)
-        x = image.img_to_array(img)
+        x = np.sum(data, 0) / 32.
+        img = np.repeat(np.expand_dims((x+1)/2, 2), 3, axis=2)
 
         plt.figure()
         plt.subplot(1, 3, 1)
-        plt.imshow(x / 255.)
+        plt.title('Grayscale Image')
+        plt.imshow(img)
 
         # We add a dimension to transform our array into a "batch"
-        # of size (1, 224, 224, 3)
-        x = np.expand_dims(x, axis=0)
-
-        # Finally we preprocess the batch
-        # (this does channel-wise color normalization)
-        x = preprocess_input(x)
+        shp = np.shape(x)
+        x = np.reshape(x, (1, shp[0], shp[1], 1))
 
         preds = model.predict(x)
-        print(f'Prediction classes for {img_name}:', decode_predictions(preds, top=3)[0])
+        plt.suptitle(f'Prediction for {data_name}:\n{preds}')
 
         predicted_idx = np.argmax(preds[0])
 
@@ -55,7 +51,7 @@ def main():
 
         # The is the output feature map of the `block5_conv3` layer,
         # the last convolutional layer in VGG16
-        last_conv_layer = model.get_layer('block5_conv3')
+        last_conv_layer = model.layers[1]
 
         # This is the gradient of the most likely class with regard to
         # the output feature map of `block5_conv3`
@@ -86,10 +82,13 @@ def main():
         heatmap = np.maximum(heatmap, 0)
         heatmap /= np.max(heatmap)
         plt.subplot(1, 3, 2)
-        plt.imshow(heatmap / 255.)
+        plt.title('Heatmap')
+        plt.imshow(heatmap / 255., cmap='jet')
 
-        # We use cv2 to load the original image
-        img = cv2.imread(img_path)
+        # turn into black and white image
+        img = np.load(data_path)
+        img = np.repeat(np.expand_dims(np.squeeze(np.sum(img, 0)), 2), 3, axis=2)
+        img = np.uint(255. * img / np.max(np.max(img)))
 
         # We resize the heatmap to have the same size as the original image
         heatmap = cv2.resize(heatmap, (img.shape[1], img.shape[0]))
@@ -101,17 +100,108 @@ def main():
         heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
 
         # 0.4 here is a heatmap intensity factor
-        superimposed_img = heatmap * 0.4 + img
+        superimposed_img = (heatmap * 0.4) + (img * 0.6)
 
-        # for some reason the plot shows the colors backwards but the saved image does not. weird
         plt.subplot(1, 3, 3)
         # flip the BGR of cv2 to the normal RGB
+        plt.title('Heatmap Overlay')
         plt.imshow(superimposed_img[..., [2, 1, 0]] / 255.)
 
+        plt.show()
+
         # Save the image to disk
-        cv2.imwrite(str(_FILE_PATH / f"heatmap_{img_name}"), superimposed_img)
+        cv2.imwrite(str( f"heatmap_{data_name}_cnn.png"), superimposed_img)
+
+def crnn_heatmap(data_names, model):
+    for data_name in data_names:
+        data_path = str(FILE_PATH / './data/' / f'{data_name}.npy')
+
+        # import data and scale
+        data = (np.squeeze(np.load(data_path)) / 128.) - 1
+
+        # `x` is a float32 Numpy array of shape (224, 224, 3)
+        x = data
+        img = np.repeat(np.expand_dims((x+1)/2, 3), 3, axis=2)
+
+        plt.figure()
+        plt.subplot(1, 3, 1)
+        plt.title('Grayscale Image')
+        plt.imshow(img[0, :, :, :])
+
+        # We add a dimension to transform our array into a "batch"
+        shp = np.shape(x)
+        x = np.reshape(x, (1, 32, shp[1], shp[2], 1))
+
+        preds = model.predict(x)
+        plt.suptitle(f'Prediction for {data_name}:\n{preds}')
+
+        predicted_idx = np.argmax(preds[0])
+
+        # This is the entry in the prediction vector with highest probability
+        cat_output = model.output[:, predicted_idx]
+
+        # The is the output feature map of the chosen layer,
+        # the last convolutional layer in model
+        last_conv_layer = model.layers[1]
+
+        # This is the gradient of the most likely class with regard to
+        # the output feature map of chosen layer
+        grads = K.gradients(cat_output, last_conv_layer.output)[0]
+
+        # This is a vector where each entry
+        # is the mean intensity of the gradient over a specific feature map channel
+        pooled_grads = K.mean(grads, axis=(0, 1, 2))
+
+        # This function allows us to access the values of the quantities we just defined:
+        # `pooled_grads` and the output feature map of chosen layer,
+        # given a sample image
+        iterate = K.function([model.input], [pooled_grads, last_conv_layer.output[0]])
+
+        # These are the values of these two quantities, as Numpy arrays,
+        # given our sample image
+        pooled_grads_value, conv_layer_output_value = iterate([x])
+
+        # We multiply each channel in the feature map array
+        # by "how important this channel is" with regard to the most likely class
+        for i in range(last_conv_layer.filters):
+            conv_layer_output_value[:, :, i] *= pooled_grads_value[i]
+
+        # The channel-wise mean of the resulting feature map
+        # is our heatmap of class activation
+        heatmap: np.ndarray = np.mean(conv_layer_output_value, axis=-1)
+
+        heatmap = np.maximum(heatmap, 0)
+        heatmap /= np.max(heatmap)
+        plt.subplot(1, 3, 2)
+        plt.title('Heatmap')
+        plt.imshow(heatmap / 255., cmap='jet')
+
+        # turn into black and white image
+        img = np.load(data_path)
+        img = np.repeat(np.expand_dims(np.squeeze(np.sum(img, 0)), 2), 3, axis=2)
+        img = np.uint(255. * img / np.max(np.max(img)))
+
+        # We resize the heatmap to have the same size as the original image
+        heatmap = cv2.resize(heatmap, (img.shape[1], img.shape[0]))
+
+        # We convert the heatmap to RGB
+        heatmap = np.uint8(255 * heatmap)
+
+        # We apply the heatmap to the original image
+        heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+
+        # 0.4 here is a heatmap intensity factor
+        superimposed_img = (heatmap * 0.4) + (img * 0.6)
+
+        plt.subplot(1, 3, 3)
+        # flip the BGR of cv2 to the normal RGB
+        plt.title('Heatmap Overlay')
+        plt.imshow(superimposed_img[..., [2, 1, 0]] / 255.)
 
         plt.show()
+
+        # Save the image to disk
+        cv2.imwrite(str( f"heatmap_{data_name}_cnn.png"), superimposed_img)
 
 
 if __name__ == "__main__":

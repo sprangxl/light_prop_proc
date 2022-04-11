@@ -19,7 +19,7 @@ def light_prop_proc():
     vocab_str = np.asarray(['zero', 'one', 'two'])
     visualize_ds_flag = True
     long_exposure_flag = False
-    model_type = 'crnn'  # values: rnn, cnn, or crnn
+    model_type = 'cnn'  # values: rnn, cnn, or crnn
 
     batch_size = 50
     num_shuffle_batches = 3

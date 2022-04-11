@@ -25,5 +25,4 @@ services:
     working_dir: /opt/project
     command:
       - python3
-      - src/light_prop_data.py
-      - src/light_prop_proc.py
+      - src/light_prop_heatmap.py
