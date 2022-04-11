@@ -1,1 +1,0 @@
-light_prop_data assumes data in 'opt/gen_data/raw/train' and 'opt/gen_data/raw/test' to generate tfrecords
