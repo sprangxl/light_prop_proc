@@ -1,5 +1,4 @@
 from pathlib import Path
-
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -7,13 +6,15 @@ import tensorflow as tf
 import tensorflow.keras.backend as K
 from tensorflow.keras.models import load_model
 
+# disable eager execution to allow for analysis of gradients
 tf.compat.v1.disable_eager_execution()
-
+# get path from current directory
 FILE_PATH = Path(__file__).parent.absolute()
 
 def main():
     # Heat map of class activation the local path to our target image
     # This is similar to the example in Section 5.4 from the Chollet book
+    # Use archived model
     data_names = ['zero', 'one', 'two']
     model = load_model('./archive/model_cnn.h5')
     cnn_heatmap(data_names, model)
@@ -86,7 +87,7 @@ def cnn_heatmap(data_names, model):
             plt.subplot(2, 4, 2 + ii)
             plt.axis('off')
             plt.title(f'Heatmap {ii}')
-            plt.imshow(heatmap, cmap='hot')
+            plt.imshow(heatmap, cmap='inferno')
 
             # turn into black and white image
             img = np.load(data_path)
@@ -98,7 +99,7 @@ def cnn_heatmap(data_names, model):
             heatmap = np.uint8(255 * heatmap)
 
             # We apply the heatmap to the original image
-            heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_HOT)
+            heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_INFERNO)
 
             # 0.4 here is a heatmap intensity factor
             superimposed_img = (heatmap * 0.4) + (img * .8)
