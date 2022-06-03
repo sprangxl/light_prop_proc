@@ -13,17 +13,17 @@ from tensorflow.keras.models import Model, load_model
 
 def light_prop_proc():
     base_dir = Path('/opt', 'data', 'gen_data', 'tfr')
-    data_img_shape = (32, 140, 146)
+    data_img_shape = (32, 100, 100)
 
     vocab = np.asarray([0, 1, 2]).astype('uint64')
     vocab_str = np.asarray(['zero', 'one', 'two'])
-    visualize_ds_flag = True
-    long_exposure_flag = False
+    visualize_ds_flag = False
+    long_exposure_flag = True
     model_type = 'cnn'  # values: rnn, cnn, or crnn
 
-    batch_size = 50
+    batch_size = 500
     num_shuffle_batches = 3
-    epochs = 100
+    epochs = 200
     validation_split = 0.75
     model_filename = 'model'
     img_file = './model_arch'
@@ -150,7 +150,7 @@ def light_prop_proc():
     for metric, name in zip(test_results, model.metrics_names):
         print(f"{name}: {metric}")
 
-    test_pts = 400
+    test_pts = 1000
     iterations = int(test_pts / batch_size)
 
     y_test = np.zeros((iterations * batch_size, 2))
@@ -167,13 +167,36 @@ def light_prop_proc():
     p_prob = model.predict(x)
     p = np.argmax(p_prob, 1)
     y = np.argmax(y, 1)
-    y_test[:, 0] = p  # predict
-    y_test[:, 1] = y  # truth
+
+    # remove data with no objects to detect
+    prob_roc = p_prob[y>0, 1:]
+    truth = y[y>0]
+
+    divs = 1000
+    sz = np.size(truth)
+    p_roc = np.ones((sz, divs))
+    thresh = np.linspace(0, 1, divs)
+    dfa = np.zeros((divs, 2))
+    print(f'Size: {sz}')
+    for dd in range(divs):
+        p_roc[prob_roc[:, 1] > thresh[dd], dd] = 2
+        cm_temp = sklearn.metrics.confusion_matrix(y_pred=p_roc[:, dd], y_true=truth)
+        dfa[dd, 0] = cm_temp[1, 1] / (cm_temp[1, 0] + cm_temp[1, 1])  # prob detect
+        dfa[dd, 1] = cm_temp[0, 1] / (cm_temp[0, 0] + cm_temp[0, 1])  # prob false alarm
+
+    fig, ax = plt.subplots(1, 2)
+    ax[0].scatter(dfa[:, 1], dfa[:, 0])
+    ax[0].plot(dfa[:, 1], dfa[:, 0])
+    ax[0].set(xlabel='P-Detect', ylabel='P-False')
+    ax[1].plot(thresh, dfa[:, 0])
+    ax[1].plot(thresh, dfa[:, 1])
+    ax[1].set(xlabel='Threshold', ylabel='Probability')
+    ax[1].legend(['% Detect', '% False'])
+    plt.show()
 
     print(sklearn.metrics.classification_report(y, p, target_names=vocab_str))
     confusion_matrix = sklearn.metrics.confusion_matrix(y_pred=p, y_true=y)
-    plot_confusion_matrix(confusion_matrix, classes=vocab_str,
-                          title='Confusion matrix, without normalization')
+    plot_confusion_matrix(confusion_matrix, classes=vocab_str, title='Confusion matrix, without normalization')
     plt.show()
 
     print('done')
