@@ -21,7 +21,7 @@ def light_prop_proc():
     long_exposure_flag = True
     model_type = 'cnn'  # values: rnn, cnn, or crnn
 
-    batch_size = 500
+    batch_size = 100
     num_shuffle_batches = 3
     epochs = 200
     validation_split = 0.75
@@ -140,7 +140,7 @@ def light_prop_proc():
 
     # fit model to dataset
     model.fit(train_dataset, batch_size=batch_size, epochs=epochs, steps_per_epoch=epoch_steps,
-              validation_data=valid_dataset, validation_steps=val_steps, verbose=0)
+              validation_data=valid_dataset, validation_steps=val_steps, verbose=1)
 
     # save model
     model.save(model_filename+'_'+model_type+'.h5')
@@ -187,11 +187,12 @@ def light_prop_proc():
     fig, ax = plt.subplots(1, 2)
     ax[0].scatter(dfa[:, 1], dfa[:, 0])
     ax[0].plot(dfa[:, 1], dfa[:, 0])
-    ax[0].set(xlabel='P-Detect', ylabel='P-False')
+    ax[0].set(xlabel='P-False', ylabel='P-Detect')
     ax[1].plot(thresh, dfa[:, 0])
     ax[1].plot(thresh, dfa[:, 1])
     ax[1].set(xlabel='Threshold', ylabel='Probability')
     ax[1].legend(['% Detect', '% False'])
+    plt.tight_layout()
     plt.show()
 
     print(sklearn.metrics.classification_report(y, p, target_names=vocab_str))
@@ -224,9 +225,10 @@ def create_rnn_model(data_shape, vocab):
 def create_cnn_model(data_shape, vocab):
     input_ = Input(shape=(data_shape[1], data_shape[2], 1,))
 
-    layer_ = Conv2D(filters=16, kernel_size=(4, 4), strides=(2, 2), padding='same', activation='relu')(input_)
-    layer_ = Conv2D(filters=32, kernel_size=(4, 4), strides=(4, 4), padding='same', activation='relu')(layer_)
-    layer_ = Conv2D(filters=64, kernel_size=(8, 8), strides=(8, 8), padding='same', activation='relu')(layer_)
+    layer_ = Conv2D(filters=10, kernel_size=(2, 2), strides=(1, 1), padding='same', activation='relu')(input_)
+    layer_ = Conv2D(filters=20, kernel_size=(4, 4), strides=(2, 2), padding='same', activation='relu')(layer_)
+    layer_ = Conv2D(filters=30, kernel_size=(10, 10), strides=(5, 5), padding='same', activation='relu')(layer_)
+    layer_ = Conv2D(filters=40, kernel_size=(10, 10), strides=(5, 5), padding='same', activation='relu')(layer_)
     layer_ = Flatten()(layer_)
     layer_ = Dense(units=64, activation='relu')(layer_)
     layer_ = Dropout(0.2)(layer_)
