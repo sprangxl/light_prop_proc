@@ -72,6 +72,18 @@ def light_prop_proc():
         label = tf.one_hot(int(label), depth=len(vocab))
         return image_inside_batched, label
 
+    def map_1hss(image_inside_batched, label):
+        # scale input data
+        image_inside_batched = image_inside_batched / 128.  # scale from 0 to 2
+        image_inside_batched = image_inside_batched - 1  # Zero-center
+        # create 'long-exposure' images from short-exposure images
+        image_inside_batched = image_inside_batched[0, :, :]
+        # add dimension to note monochromatic light
+        image_inside_batched = tf.expand_dims(image_inside_batched, 2)
+        # one-hot encode output when flag is up
+        label = tf.one_hot(int(label), depth=len(vocab))
+        return image_inside_batched, label
+
     # repeat, shuffle, scale, batch, and prefetch the datasets in a function
     def repeat_shuffle_scale_batch_prefetch_dataset(dataset: tf.data.Dataset):
         # repeat
@@ -79,8 +91,11 @@ def light_prop_proc():
         # shuffle
         dataset = dataset.shuffle(buffer_size=batch_size * num_shuffle_batches)
         # map (based on given flags)
-        if long_exposure_flag:
-            dataset = dataset.map(map_func=map_1hls, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        if model_type=='cnn':
+            if long_exposure_flag:
+                dataset = dataset.map(map_func=map_1hls, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+            else:
+                dataset = dataset.map(map_func=map_1hss, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         else:
             dataset = dataset.map(map_func=map_1h, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # chain together batch and prefetch
@@ -185,14 +200,16 @@ def light_prop_proc():
         dfa[dd, 1] = cm_temp[0, 1] / (cm_temp[0, 0] + cm_temp[0, 1])  # prob false alarm
 
     fig, ax = plt.subplots(1, 2)
-    ax[0].scatter(dfa[:, 1], dfa[:, 0])
     ax[0].plot(dfa[:, 1], dfa[:, 0])
+    ax[0].plot([0, 1], [0, 1])
     ax[0].set(xlabel='P-False', ylabel='P-Detect')
+    ax[0].legend(['CNN', '50-50'])
     ax[1].plot(thresh, dfa[:, 0])
     ax[1].plot(thresh, dfa[:, 1])
     ax[1].set(xlabel='Threshold', ylabel='Probability')
     ax[1].legend(['% Detect', '% False'])
     plt.tight_layout()
+    plt.savefig('DFA_ROC.png')
     plt.show()
 
     print(sklearn.metrics.classification_report(y, p, target_names=vocab_str))
@@ -225,14 +242,15 @@ def create_rnn_model(data_shape, vocab):
 def create_cnn_model(data_shape, vocab):
     input_ = Input(shape=(data_shape[1], data_shape[2], 1,))
 
-    layer_ = Conv2D(filters=10, kernel_size=(2, 2), strides=(1, 1), padding='same', activation='relu')(input_)
-    layer_ = Conv2D(filters=20, kernel_size=(4, 4), strides=(2, 2), padding='same', activation='relu')(layer_)
+    layer_ = Conv2D(filters=10, kernel_size=(10, 10), strides=(2, 2), padding='same', activation='relu')(input_)
+    layer_ = Conv2D(filters=20, kernel_size=(10, 10), strides=(1, 1), padding='same', activation='relu')(layer_)
     layer_ = Conv2D(filters=30, kernel_size=(10, 10), strides=(5, 5), padding='same', activation='relu')(layer_)
-    layer_ = Conv2D(filters=40, kernel_size=(10, 10), strides=(5, 5), padding='same', activation='relu')(layer_)
+    layer_ = Conv2D(filters=40, kernel_size=(5, 5), strides=(1, 1), padding='same', activation='relu')(layer_)
+    layer_ = Conv2D(filters=80, kernel_size=(5, 5), strides=(2, 2), padding='same', activation='relu')(layer_)
     layer_ = Flatten()(layer_)
-    layer_ = Dense(units=64, activation='relu')(layer_)
+    layer_ = Dense(units=128, activation='relu')(layer_)
     layer_ = Dropout(0.2)(layer_)
-    layer_ = Dense(units=32, activation='relu')(layer_)
+    layer_ = Dense(units=64, activation='relu')(layer_)
     layer_ = Dropout(0.2)(layer_)
     output_ = Dense(units=len(vocab), activation='softmax')(layer_)
 
